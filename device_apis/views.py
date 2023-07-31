@@ -98,6 +98,9 @@ class UserLogin(generics.GenericAPIView):
 
 
 class DeviceListView(generics.GenericAPIView):
+    """
+    This APIs is used to list all devices.
+    """
     serializer_class = api_serializers.DeviceSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -106,3 +109,72 @@ class DeviceListView(generics.GenericAPIView):
         print("request.data", self.request.data)
         self.queryset = Devices.objects.all()
         return Response(self.serializer_class(self.queryset, many=True).data, status=status.HTTP_200_OK)
+
+
+class DeviceDetailView(generics.GenericAPIView):
+    """
+    This APIs is used to give details of devices.
+    """
+    serializer_class = api_serializers.DeviceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+    def get(self, request, device_id, *args, **kwargs):
+        try:
+            device = Devices.objects.get(id=device_id)
+            return Response(self.serializer_class(device).data, status=status.HTTP_200_OK)
+        except Devices.DoesNotExist as e:
+            return Response({"message": "Device not found", "error": str(e.__class__.__name__)},
+                            status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"message": "Device not found", "error":str(e.__class__.__name__)}, status=status.HTTP_400_BAD_REQUEST)
+
+class DeviceDeleteView(generics.GenericAPIView):
+    """
+    This APIs is used to delete the devices.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, device_id, *args, **kwargs):
+        try:
+            device = Devices.objects.get(id=device_id)
+            device.delete()
+            return Response({"message": "Device Deleted Successfully"}, status=status.HTTP_200_OK)
+        except Devices.DoesNotExist as e:
+            return Response({"message": "Device not found", "error": str(e.__class__.__name__)},
+                            status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"message": "Backend Error", "error": str(e.__class__.__name__)},
+                                    status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class DeviceSellView(generics.GenericAPIView):
+    serializer_class = api_serializers.DeviceSoldSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+    def post(self, request, *args, **kwargs):
+        print("user", self.request.user.id)
+        try:
+            device_id = self.request.data("device_id")
+            device = Devices.objects.get(id=device_id)
+            device_data = {"device": device.id, "user": self.request.user.id}
+            print("request data", device_data)
+            check_valid_data = self.serializer_class(data=self.request.data)
+            if check_valid_data.is_valid(raise_exception=True):
+                device = check_valid_data.create(validated_data=check_valid_data.validated_data)
+                return Response({"deviceId": device.id,
+                                 "userId": device.user.id,
+                                 "message": "Device sold Successfully"},
+                                status=status.HTTP_200_OK)
+            return Response({"message": "Invalid request",
+                             "error": self.serializer_class.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
+        except Devices.DoesNotExist as e:
+            return Response({"message": "Device not found",
+                             "error": str(e.__class__.__name__)},
+                            status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"message": "Backend Internal Server Error",
+                             "error": str(e.__class__.__name__)},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)

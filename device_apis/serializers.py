@@ -14,11 +14,12 @@ class DeviceSerializer(serializers.ModelSerializer):
         return device
 
 
-class DeviceSoldSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DeviceSold
-        fields = '__all__'
-
+class DeviceSoldSerializer(serializers.Serializer):
+    device_id = serializers.IntegerField()
+    def create(self, validated_data):
+        device_sold = DeviceSold.objects.create(**validated_data)
+        device_sold.save()
+        return device_sold
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     class Meta:
