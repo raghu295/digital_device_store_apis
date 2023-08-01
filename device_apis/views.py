@@ -6,6 +6,7 @@ import device_apis.serializers as api_serializers
 from device_apis.models import Devices, DeviceSold, User
 from rest_framework_simplejwt.tokens import AccessToken
 from django.contrib.auth import authenticate
+from django.db.models import Sum
 
 
 # Create your views here.
@@ -156,15 +157,16 @@ class DeviceSellView(generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
         print("user", self.request.user.id)
         try:
-            device_id = self.request.data("device_id")
+            device_id = self.request.data.get("device_id")
             device = Devices.objects.get(id=device_id)
-            device_data = {"device": device.id, "user": self.request.user.id}
+            device_data = {"device_id": device.id}
             print("request data", device_data)
             check_valid_data = self.serializer_class(data=self.request.data)
             if check_valid_data.is_valid(raise_exception=True):
-                device = check_valid_data.create(validated_data=check_valid_data.validated_data)
-                return Response({"deviceId": device.id,
-                                 "userId": device.user.id,
+                check_valid_data.validated_data["user_id"] = self.request.user.id
+                device_sold = check_valid_data.create(validated_data=check_valid_data.validated_data)
+                return Response({"deviceId": device_sold.id,
+                                 "userId": self.request.user.id,
                                  "message": "Device sold Successfully"},
                                 status=status.HTTP_200_OK)
             return Response({"message": "Invalid request",
@@ -176,5 +178,60 @@ class DeviceSellView(generics.GenericAPIView):
                             status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"message": "Backend Internal Server Error",
-                             "error": str(e.__class__.__name__)},
+                             "error": str(e)},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class DeviceUpdateView(generics.GenericAPIView):
+    serializer_class = api_serializers.DeviceUpdateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+    def put(self, request, device_id, *args, **kwargs):
+        try:
+            device_data = self.request.data
+            device_data_serializer = self.serializer_class(data=device_data)
+            if device_data_serializer.is_valid(raise_exception=True):
+                device = Devices.objects.get(id=device_id)
+                device_update = device_data_serializer.update(device, device_data_serializer.validated_data)
+                return Response({"message": 'Device updated Successfully',
+                         "deviceId": device_update.id}, status=status.HTTP_200_OK)
+            return Response({"message": "Invalid request",
+                         "error": self.serializer_class.errors},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+        except Devices.DoesNotExist as e:
+            return Response({"message": "Device not found",
+                     "error": str(e.__class__.__name__)},
+                    status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({"message": "Backend Internal Server Error",
+                 "error": str(e.__class__.__name__)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class DeviceStats(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    device_stat = {
+        "total_devices": 0,
+        "total_sold_devices": 0,
+        "total_users": 0,
+        "total_income": 0
+    }
+
+    def get(self, request, *args, **kwargs):
+        try:
+            self.device_stat['total_devices'] = Devices.objects.all().count()
+            self.device_stat['total_sold_devices'] = DeviceSold.objects.all().count()
+            self.device_stat['total_users'] = User.objects.all().count()
+            print("income", DeviceSold.objects.all().aggregate(Sum("device__price")))
+
+            self.device_stat["total_income"] = DeviceSold.objects.all().aggregate(Sum("device__price")) ["device__price__sum"]
+            return Response(self.device_stat,
+                        status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({"message": "Backend Internal Server Error",
+                         "error": str(e.__class__.__name__)},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
