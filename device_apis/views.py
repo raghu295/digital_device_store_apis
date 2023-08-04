@@ -13,7 +13,7 @@ from django.db.models import Sum
 
 @api_view(["GET"])
 def home(request):
-    message = {"message": "Hello, world"}
+    message = {"message": "Welcome to Device APIs"}
     return Response(message, status=200)
 
 
